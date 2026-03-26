@@ -102,9 +102,15 @@ class CometdClientMessageResolver {
   
   private func resolveMetaHandshake(for message: JSON) {
     bayeuxClient.clientId = message[Bayeux.clientId.rawValue].stringValue
-    if message[Bayeux.successful.rawValue].int == 1 {
-      if let ext = message[Bayeux.ext.rawValue].object as? NSDictionary {
+    if message[Bayeux.successful.rawValue].boolValue {
+      // Some servers send `successful: true` and may omit/reshape `ext`.
+      // Always notify success to unblock connection flow.
+      if let ext = message[Bayeux.ext.rawValue].dictionaryObject as NSDictionary? {
         delegate?.handshakeDidSucceeded(dictionary: ext, from: self)
+      } else if let root = message.dictionaryObject as NSDictionary? {
+        delegate?.handshakeDidSucceeded(dictionary: root, from: self)
+      } else {
+        delegate?.handshakeDidSucceeded(dictionary: [:], from: self)
       }
       bayeuxClient.isConnected = true
       bayeuxClient.connect()
