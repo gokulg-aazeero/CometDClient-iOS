@@ -35,38 +35,44 @@ class BayeuxClient: BayeuxClientContract {
   // "version": "1.0",
   // "minimumVersion": "1.0beta",
   // "supportedConnectionTypes": ["long-polling", "callback-polling", "iframe", "websocket]
-  func handshake() {
-    guard let data = self.handshakeFields else {
-      log.debug("handshakeFields is nil")
-      return
+    func handshake() {
+        guard let data = self.handshakeFields else {
+            log.debug("handshakeFields is nil")
+            return
+        }
+        
+        writeOperationQueue.sync { [weak self] in
+            // Match the working web payload: websocket, long-polling, callback-polling
+            let connTypes = [
+                BayeuxConnection.webSocket.rawValue,
+                BayeuxConnection.longPolling.rawValue,
+                BayeuxConnection.callback.rawValue
+            ]
+            
+            var dict: [String: Any] = [
+                Bayeux.channel.rawValue: BayeuxChannel.handshake.rawValue,
+                Bayeux.version.rawValue: "1.0",
+                Bayeux.minimumVersion.rawValue: "1.0",
+                Bayeux.supportedConnectionTypes.rawValue: connTypes,
+                
+                // Web works with id = "1"
+                Bayeux.id.rawValue: "1",
+                
+                // IMPORTANT: backend expects auth fields here (not in ext.authentication)
+                Bayeux.data.rawValue: data
+            ]
+            
+            dict[Bayeux.advice.rawValue] = [
+                BayeuxAdvice.interval.rawValue: 0,
+                BayeuxAdvice.timeout.rawValue: 60000
+            ]
+            
+            if let string = JSON(dict).rawString(String.Encoding.utf8, options: []) {
+                self?.log.verbose("CometdClient handshake \(string)")
+                self?.transport?.writeString("["+string+"]")
+            }
+        }
     }
-    writeOperationQueue.sync { [weak self] in
-      let connTypes = [BayeuxConnection.longPolling.rawValue, BayeuxConnection.callback.rawValue, BayeuxConnection.iFrame.rawValue, BayeuxConnection.webSocket.rawValue]
-      
-      var dict: [String: Any] = [
-        Bayeux.channel.rawValue: BayeuxChannel.handshake.rawValue,
-        Bayeux.version.rawValue: "1.0",
-        Bayeux.minimumVersion.rawValue: "1.0",
-        Bayeux.supportedConnectionTypes.rawValue: connTypes,
-      ]
-      
-      let ext: [String: Any] = [
-        "authentication": data
-      ]
-      let advice: [String: Any] = [
-        BayeuxAdvice.interval.rawValue: 0,
-        BayeuxAdvice.timeout.rawValue: 6000
-      ]
-      
-      dict[Bayeux.ext.rawValue] = ext
-      dict[Bayeux.advice.rawValue] = advice
-      
-      if let string = JSON(dict).rawString(String.Encoding.utf8, options: []) {
-        self?.log.verbose("CometdClient handshake \(string)")
-        self?.transport?.writeString("["+string+"]")
-      }
-    }
-  }
   
   func sendPing(_ data: Data, completion: (() -> Void)?) {
     writeOperationQueue.async { [weak self] in
