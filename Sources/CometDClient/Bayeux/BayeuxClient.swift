@@ -145,14 +145,21 @@ class BayeuxClient: BayeuxClientContract {
       guard let self = self, let clientId = self.clientId else {
         throw CometdSubscriptionModelError.clientIdNotValid
       }
-      let dictionaries = models.compactMap({
-        [
-          Bayeux.channel.rawValue: $0.bayeuxChannel.rawValue,
+      let dictionaries = models.map { model -> [String: Any] in
+        var dict: [String: Any] = [
+          Bayeux.channel.rawValue: model.bayeuxChannel.rawValue,
           Bayeux.clientId.rawValue: clientId,
-          Bayeux.id.rawValue: $0.id,
-          Bayeux.subscription.rawValue: $0.subscriptionUrl
+          Bayeux.id.rawValue: model.id,
+          Bayeux.subscription.rawValue: model.subscriptionUrl
         ]
-      })
+        if let extra = model.subscriptionData, !extra.isEmpty {
+          // Server expects auth/context fields at the same level as Bayeux subscribe keys.
+          for (key, value) in extra where dict[key] == nil {
+            dict[key] = value
+          }
+        }
+        return dict
+      }
       
       if let string = JSON(dictionaries).rawString(String.Encoding.utf8, options: []) {
         self.log.verbose("CometdClient subscribe \(string)")
@@ -174,12 +181,18 @@ class BayeuxClient: BayeuxClientContract {
       guard let self = self, let clientId = self.clientId else {
         throw CometdSubscriptionModelError.clientIdNotValid
       }
-      let dictionary: [String: Any] = [
+      var dictionary: [String: Any] = [
         Bayeux.channel.rawValue: model.bayeuxChannel.rawValue,
         Bayeux.clientId.rawValue: clientId,
         Bayeux.id.rawValue: model.id,
         Bayeux.subscription.rawValue: model.subscriptionUrl
       ]
+      if let extra = model.subscriptionData, !extra.isEmpty {
+        // Server expects auth/context fields at the same level as Bayeux subscribe keys.
+        for (key, value) in extra where dictionary[key] == nil {
+          dictionary[key] = value
+        }
+      }
       
       if let string = JSON(dictionary).rawString(String.Encoding.utf8, options: []) {
         self.log.verbose("CometdClient subscribe \(string)")

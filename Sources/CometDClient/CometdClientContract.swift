@@ -34,4 +34,10 @@ public extension CometdClientContract {
   func configure(url: String, recorder: CometDClientRecorder?) {
     configure(url: url, backoffIncrement: 1000, maxBackoff: 60000, appendMessageTypeToURL: false, recorder: recorder)
   }
+  
+  /// Subscribe with optional fields merged into the Bayeux `/meta/subscribe` payload root.
+  func subscribe(_ model: CometdSubscriptionModel, data: [String: Any]?) {
+    model.subscriptionData = (data?.isEmpty == false) ? data : nil
+    subscribe(model)
+  }
 }
