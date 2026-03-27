@@ -67,10 +67,7 @@ class CometdClientMessageResolver {
           log.warning("Cometd: Weird channel that not been set to subscribed: \(channel)")
           return
         }
-        guard let data = message[Bayeux.data.rawValue].object as? NSDictionary else {
-          log.warning("Cometd: For some reason data is nil for channel: \(channel)")
-          return
-        }
+        guard let data = resolveChannelData(from: message, channel: channel) else { return }
         
         if let channelBlock = subscriber.channelSubscriptionBlocks[channel] {
           for channel in channelBlock {
@@ -82,6 +79,24 @@ class CometdClientMessageResolver {
         delegate?.didReceiveMessage(dictionary: data, from: channel, resolver: self)
       }
     }
+  }
+  
+  /// Some servers publish channel payload under `data` as an object while others send a JSON-encoded string.
+  /// Normalize both formats to NSDictionary for downstream callbacks.
+  private func resolveChannelData(from message: JSON, channel: String) -> NSDictionary? {
+    if let dictionary = message[Bayeux.data.rawValue].dictionaryObject as NSDictionary? {
+      return dictionary
+    }
+    
+    if let jsonString = message[Bayeux.data.rawValue].string,
+       let jsonData = jsonString.data(using: .utf8),
+       let parsed = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+       let dictionary = parsed as? NSDictionary {
+      return dictionary
+    }
+    
+    log.warning("Cometd: For some reason data is nil for channel: \(channel)")
+    return nil
   }
   
   // MARK: Resolve META
