@@ -34,7 +34,12 @@ class WebsocketTransport: Transport {
     guard let url = URL(string: urlString) else {
       fatalError("WebSocket url isn't conform")
     }
-    self.webSocket = WebSocket(request: URLRequest(url: url))
+
+    // Some WAF/CDN setups block WebSocket upgrades when the client does not provide a
+    // `User-Agent` header. We set it explicitly on the upgrade request.
+    var request = URLRequest(url: url)
+    request.setValue("iOS", forHTTPHeaderField: "User-Agent")
+    self.webSocket = WebSocket(request: request)
     if let webSocket = self.webSocket {
       webSocket.delegate = self
       webSocket.connect()

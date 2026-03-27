@@ -27,6 +27,9 @@ open class CometdSubscriptionModel {
   /// Uniqle client id for socket
   open var clientId: String?
   
+  /// Merged into `/meta/subscribe` payload root when non-empty (e.g. auth/context fields).
+  open var subscriptionData: [String: Any]?
+  
   // Id of the subscribtion
   open var id: Int
   
@@ -40,6 +43,7 @@ open class CometdSubscriptionModel {
     self.subscriptionUrl = subscriptionUrl
     self.bayeuxChannel = bayeuxChannel
     self.clientId = clientId
+    self.subscriptionData = nil
     CometdSubscriptionModel.id += 1
     self.id = CometdSubscriptionModel.id
   }

@@ -67,10 +67,7 @@ class CometdClientMessageResolver {
           log.warning("Cometd: Weird channel that not been set to subscribed: \(channel)")
           return
         }
-        guard let data = message[Bayeux.data.rawValue].object as? NSDictionary else {
-          log.warning("Cometd: For some reason data is nil for channel: \(channel)")
-          return
-        }
+        guard let data = resolveChannelData(from: message, channel: channel) else { return }
         
         if let channelBlock = subscriber.channelSubscriptionBlocks[channel] {
           for channel in channelBlock {
@@ -82,6 +79,24 @@ class CometdClientMessageResolver {
         delegate?.didReceiveMessage(dictionary: data, from: channel, resolver: self)
       }
     }
+  }
+  
+  /// Some servers publish channel payload under `data` as an object while others send a JSON-encoded string.
+  /// Normalize both formats to NSDictionary for downstream callbacks.
+  private func resolveChannelData(from message: JSON, channel: String) -> NSDictionary? {
+    if let dictionary = message[Bayeux.data.rawValue].dictionaryObject as NSDictionary? {
+      return dictionary
+    }
+    
+    if let jsonString = message[Bayeux.data.rawValue].string,
+       let jsonData = jsonString.data(using: .utf8),
+       let parsed = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+       let dictionary = parsed as? NSDictionary {
+      return dictionary
+    }
+    
+    log.warning("Cometd: For some reason data is nil for channel: \(channel)")
+    return nil
   }
   
   // MARK: Resolve META
@@ -102,9 +117,15 @@ class CometdClientMessageResolver {
   
   private func resolveMetaHandshake(for message: JSON) {
     bayeuxClient.clientId = message[Bayeux.clientId.rawValue].stringValue
-    if message[Bayeux.successful.rawValue].int == 1 {
-      if let ext = message[Bayeux.ext.rawValue].object as? NSDictionary {
+    if message[Bayeux.successful.rawValue].boolValue {
+      // Some servers send `successful: true` and may omit/reshape `ext`.
+      // Always notify success to unblock connection flow.
+      if let ext = message[Bayeux.ext.rawValue].dictionaryObject as NSDictionary? {
         delegate?.handshakeDidSucceeded(dictionary: ext, from: self)
+      } else if let root = message.dictionaryObject as NSDictionary? {
+        delegate?.handshakeDidSucceeded(dictionary: root, from: self)
+      } else {
+        delegate?.handshakeDidSucceeded(dictionary: [:], from: self)
       }
       bayeuxClient.isConnected = true
       bayeuxClient.connect()
